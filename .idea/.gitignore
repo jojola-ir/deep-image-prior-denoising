@@ -10,3 +10,5 @@
 /ZeppelinRemoteNotebooks/
 *.xml
 *.iml
+.idea
+.gitignore
