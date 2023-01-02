@@ -100,7 +100,7 @@ if __name__ == "__main__":
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     loss_fn = nn.MSELoss()
 
-    train(val_loader, val_loader, model, optimizer, loss_fn, num_epochs, device)
+    train(train_path, val_loader, model, optimizer, loss_fn, num_epochs, device)
 
     psnr, mse = evaluate(test_loader, model, loss_fn, device)
     print(f"test_psnr : {psnr} - test_mse : {mse}")
