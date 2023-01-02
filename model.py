@@ -32,7 +32,7 @@ class Unet(nn.Module):
             in_channels = feature
             
         # upstream
-        for features in reversed(range(depth - 1)):
+        for features in reversed(range(depth)):
             feature = in_features * 2 ** features
             self.ups.append(
                 nn.ConvTranspose2d(feature*2, feature, kernel_size=2, stride=2)
@@ -66,3 +66,9 @@ class Unet(nn.Module):
             x = self.ups[idx+1](concat)
 
         return self.output(x)
+
+
+if __name__ == "__main__":
+    model = Unet(in_channels=3, out_channels=3)
+    x = torch.randn((1, 3, 224, 224))
+    print(model(x).shape)
