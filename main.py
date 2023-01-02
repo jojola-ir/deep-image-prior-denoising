@@ -4,6 +4,8 @@ import itertools
 
 from os.path import join
 
+import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -79,6 +81,8 @@ if __name__ == "__main__":
     else:
         device = "cpu"
 
+    print(f"Using device: {device}")
+
     transform = transformations()
 
     train_path = join(dataset_path, "train")
@@ -95,7 +99,7 @@ if __name__ == "__main__":
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     loss_fn = nn.MSELoss()
 
-    train(train_loader, val_loader, model, optimizer, loss_fn, num_epochs, device)
+    train(val_loader, val_loader, model, optimizer, loss_fn, num_epochs, device)
 
     psnr, mse = evaluate(test_loader, model, loss_fn, device)
     print(f"test_psnr : {psnr} - test_mse : {mse}")
