@@ -77,7 +77,7 @@ def build_data_pipes(path_to_images, transform, noise_parameter, batch_size):
 
 
 if __name__ == '__main__':
-    path_to_images = "./DS/Projects/datasets/GAN/chest_xray/val/"
+    path_to_images = "../datasets/GAN/chest_xray/val/"
     noise_parameter = 0.2
     batch_size = 32
 
