@@ -26,8 +26,8 @@ def evaluate(loader, model, loss_fn, device):
             preds = model(data)
             target = target.to(device)
 
-            psnr.extend(PSNR(target.cpu().detach(), preds.cpu().detach()))
-            mse.extend(loss_fn(target.cpu().detach(), preds.cpu().detach()))
+            psnr.append(PSNR(target.cpu().detach(), preds.cpu().detach()))
+            mse.append(loss_fn(target.cpu().detach(), preds.cpu().detach()))
 
     return np.array(psnr).mean(), np.array(mse).mean()
 
@@ -88,6 +88,8 @@ if __name__ == "__main__":
     train_loader = build_data_pipes(train_path, transform, noise_parameter, batch_size)
     val_loader = build_data_pipes(val_path, transform, noise_parameter, batch_size)
     test_loader = build_data_pipes(test_path, transform, noise_parameter, batch_size)
+
+    print("Data loaded")
 
     model = Unet(in_channels=3, out_channels=3).to(device=device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
