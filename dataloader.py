@@ -19,7 +19,6 @@ def get_noisy_image(image, noise_parameter):
     Args:
         image: image, np.array with values from 0 to 1
         noise_parameter: std of the noise
-        type: type of noise, 'gaussian', 'poisson' or 'bernoulli'
     """
     image_shape = image.shape
 

@@ -1,116 +1,90 @@
+import argparse
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import albumentations as A
 
 from tqdm.auto import tqdm
 
+from dataloader import build_data_pipe, transformations
+from metrics import PSNR
 from model import Unet
 
 
-if torch.cuda.is_available():
-    DEVICE = "cuda"
-elif torch.backends.mps.is_available():
-    DEVICE = "mps"
-else:
-    DEVICE = "cpu"
+def evaluate(loader, model, loss_fn, device):
+    model.eval()
+    psnr = []
+    mse = []
+    with torch.no_grad():
+        for data, target in loader:
+            data = data.to(device)
 
-BATCH_SIZE = 16
-NUM_EPOCHS = 3
-NUM_WORKERS = 2
-IMAGE_HEIGHT = 160
-IMAGE_WIDTH = 240
-PIN_MEMORY = True
+            preds = model(data)
+            target = target.to(device)
+
+            psnr.extend(PSNR(target.cpu().detach(), preds.cpu().detach()))
+            mse.extend(loss_fn(target.cpu().detach(), preds.cpu().detach()))
+
+    return np.array(psnr).mean(), np.array(mse).mean()
 
 
-def train(loader, model, optimizer, loss_fn, scaler):
-    loop = tqdm(loader)
+def train(train_loader, val_loader, model, optimizer, loss_fn, epochs, device):
 
-    for batch_idx, (data, targets) in enumerate(loop):
-        data = data.to(device=DEVICE)
-        targets = targets.float().unsqueeze(1).to(device=DEVICE)
+    for epoch in tqdm(range(1, epochs+1)):
+        for data, target in train_loader:
+            data = data.to(device)
+            target = target.to(device)
 
-        # forward
-        with torch.cuda.amp.autocast():
-            predictions = model(data)
-            loss = loss_fn(predictions, targets)
+            loss = loss_fn(model(data), targets)
+            train_psnr = PSNR(target.cpu().detach(), model(data).cpu().detach())
 
         # backward
         optimizer.zero_grad()
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
+        loss.backward()
+        optimizer.step()
 
-        # update tqdm loop
-        loop.set_postfix(loss=loss.item())
+        psnr, mse = evaluate(val_loader, model, loss_fn, device)
 
-
-def main():
-    train_transform = A.Compose(
-        [
-            A.Resize(height=IMAGE_HEIGHT, width=IMAGE_WIDTH),
-            A.Rotate(limit=35, p=1.0),
-            A.HorizontalFlip(p=0.5),
-            A.VerticalFlip(p=0.1),
-            A.Normalize(
-                mean=[0.0, 0.0, 0.0],
-                std=[1.0, 1.0, 1.0],
-                max_pixel_value=255.0,
-            ),
-            ToTensorV2(),
-        ],
-    )
-
-    val_transforms = A.Compose(
-        [
-            A.Resize(height=IMAGE_HEIGHT, width=IMAGE_WIDTH),
-            A.Normalize(
-                mean=[0.0, 0.0, 0.0],
-                std=[1.0, 1.0, 1.0],
-                max_pixel_value=255.0,
-            ),
-            ToTensorV2(),
-        ],
-    )
-
-    model = Unet(in_channels=3, out_channels=1).to(DEVICE)
-    loss = nn.BCEWithLogitsLoss()
-    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
-
-    train_loader, val_loader = get_loaders(
-        TRAIN_IMG_DIR,
-        TRAIN_MASK_DIR,
-        VAL_IMG_DIR,
-        VAL_MASK_DIR,
-        BATCH_SIZE,
-        train_transform,
-        val_transforms,
-        NUM_WORKERS,
-        PIN_MEMORY,
-    )
-
-    if LOAD_MODEL:
-        load_checkpoint(torch.load("my_checkpoint.pth.tar"), model)
+        print(f"epoch: {epoch} - train_psnr: {train_psnr} - train_mse: {loss}", end="")
+        print(f" - val_psnr: {psnr} - val_mse: {mse}")
 
 
-    check_accuracy(val_loader, model, device=DEVICE)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--path_to_images", "-p", type=str, default="../../../datasets/GAN/chest_xray/")
+    parser.add_argument("--epochs", "-e", type=int, default=30)
+    parser.add_argument("--learning_rate", "-l", type=float, default=5e-4)
+    parser.add_argument("--batch_size", "-b", type=int, default=16)
+    parser.add_argument("--noise_parameter", "-n", type=float, default=0.2)
+    parser.add_argument("--results", "-r", type=str, default="results/")
 
-    scaler = torch.cuda.amp.GradScaler()
+    args = parser.parse_args()
 
-    for epoch in range(NUM_EPOCHS):
-        train_fn(train_loader, model, optimizer, loss, scaler)
+    dataset_path = args.path_to_images
+    num_epochs = args.epochs
+    learning_rate = args.learning_rate
+    batch_size = args.batch_size
+    noise_parameter = args.noise_parameter
+    results_path = args.results
 
-        # save model
-        checkpoint = {
-            "state_dict": model.state_dict(),
-            "optimizer": optimizer.state_dict(),
-        }
-        save_checkpoint(checkpoint)
+    if torch.cuda.is_available():
+        device = "cuda"
+    elif torch.backends.mps.is_available():
+        device = "mps"
+    else:
+        device = "cpu"
 
-        # check accuracy
-        check_accuracy(val_loader, model, device=DEVICE)
+    transform = transformations()
 
-        # print some examples to a folder
-        save_predictions_as_imgs(
-            val_loader, model, folder="saved_images/", device=DEVICE
-        )
+    data_pipe = build_pipeline(dataset_path, transform, noise_parameter, batch_size)
+
+    train_loader, val_loader = data_pipe
+
+    # model = Unet(in_channels=3, out_channels=3).to(device=device)
+    # optimizer = optim.Adam(model.parameters(), lr=1e-3)
+    # loss_fn = nn.MSELoss()
+    #
+    # train(data_pipe, model, optimizer, loss_fn, scaler)
+    #
+    # # save model
+    # torch.save(model.state_dict(), "model.pth")
