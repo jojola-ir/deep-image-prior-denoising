@@ -8,8 +8,7 @@ from torch.utils.data import Dataset, default_collate
 import torchdata.datapipes as dp
 import torchvision
 from torchvision import transforms
-from torchvision.io import read_image
-
+from torchvision.io import read_image, ImageReadMode
 
 IMG_SIZE = 224
 
@@ -22,17 +21,19 @@ def get_noisy_image(image, noise_parameter):
         noise_parameter: std of the noise
         type: type of noise, 'gaussian', 'poisson' or 'bernoulli'
     """
+    image_shape = image.shape
+
     noise_type = np.random.choice(['gaussian', 'poisson', 'bernoulli'])
     if noise_type == 'gaussian':
-        noise = torch.normal(0, noise_parameter, image.shape)
+        noise = torch.normal(0, noise_parameter, image_shape)
         noisy_image = (image + noise).clip(0, 1)
     elif noise_type == 'poisson':
-        a = noise_parameter * torch.ones(image.shape)
+        a = noise_parameter * torch.ones(image_shape)
         noise = torch.poisson(a)
         noise /= noise.max()
         noisy_image = (image + noise).clip(0, 1)
     elif noise_type == 'bernoulli':
-        noise = torch.bernoulli(noise_parameter * torch.ones(image.shape))
+        noise = torch.bernoulli(noise_parameter * torch.ones(image_shape))
         noisy_image = (image * noise).clip(0, 1)
 
     return noisy_image
@@ -67,7 +68,7 @@ def build_data_pipes(path_to_images, transform, noise_parameter, batch_size):
         .map(lambda x: (x, x))\
         .enumerate()\
         .to_map_datapipe()\
-        .map(lambda x: (read_image(x[0]), read_image(x[1])))\
+        .map(lambda x: (read_image(x[0], ImageReadMode.RGB), read_image(x[1], ImageReadMode.RGB)))\
         .map(lambda x: (get_noisy_image(x[0], noise_parameter), x[1]))\
         .map(lambda x: (transform(x[0]), transform(x[1])))\
         .shuffle()\
@@ -77,7 +78,7 @@ def build_data_pipes(path_to_images, transform, noise_parameter, batch_size):
 
 
 if __name__ == '__main__':
-    path_to_images = "../datasets/GAN/chest_xray/val/"
+    path_to_images = "../../../datasets/GAN/chest_xray/"
     noise_parameter = 0.2
     batch_size = 32
 
@@ -86,4 +87,3 @@ if __name__ == '__main__':
     data_pipe = build_data_pipes(path_to_images, transform, noise_parameter, batch_size)
     for noisy_image, target in itertools.islice(data_pipe, 5):
         print(noisy_image.shape, target.shape)
-        break
