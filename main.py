@@ -1,4 +1,8 @@
+import os
 import argparse
+import itertools
+
+from os.path import join
 
 import torch
 import torch.nn as nn
@@ -30,12 +34,13 @@ def evaluate(loader, model, loss_fn, device):
 
 def train(train_loader, val_loader, model, optimizer, loss_fn, epochs, device):
 
-    for epoch in tqdm(range(1, epochs+1)):
+    for epoch in range(1, epochs+1):
+        print(f"Epoch {epoch} of {epochs} - ", end="")
         for data, target in train_loader:
             data = data.to(device)
             target = target.to(device)
 
-            loss = loss_fn(model(data), targets)
+            loss = loss_fn(model(data), target)
             train_psnr = PSNR(target.cpu().detach(), model(data).cpu().detach())
 
         # backward
@@ -45,7 +50,7 @@ def train(train_loader, val_loader, model, optimizer, loss_fn, epochs, device):
 
         psnr, mse = evaluate(val_loader, model, loss_fn, device)
 
-        print(f"epoch: {epoch} - train_psnr: {train_psnr} - train_mse: {loss}", end="")
+        print(f"train_psnr: {train_psnr} - train_mse: {loss}", end="")
         print(f" - val_psnr: {psnr} - val_mse: {mse}")
 
 
@@ -54,7 +59,7 @@ if __name__ == "__main__":
     parser.add_argument("--path_to_images", "-p", type=str, default="../../../datasets/GAN/chest_xray/")
     parser.add_argument("--epochs", "-e", type=int, default=30)
     parser.add_argument("--learning_rate", "-l", type=float, default=5e-4)
-    parser.add_argument("--batch_size", "-b", type=int, default=16)
+    parser.add_argument("--batch_size", "-b", type=int, default=8)
     parser.add_argument("--noise_parameter", "-n", type=float, default=0.2)
     parser.add_argument("--results", "-r", type=str, default="results/")
 
@@ -76,15 +81,25 @@ if __name__ == "__main__":
 
     transform = transformations()
 
-    data_pipe = build_pipeline(dataset_path, transform, noise_parameter, batch_size)
+    train_path = join(dataset_path, "train")
+    val_path = join(dataset_path, "val")
+    test_path = join(dataset_path, "test")
 
-    train_loader, val_loader = data_pipe
+    train_loader = build_data_pipes(train_path, transform, noise_parameter, batch_size)
+    val_loader = build_data_pipes(val_path, transform, noise_parameter, batch_size)
+    test_loader = build_data_pipes(test_path, transform, noise_parameter, batch_size)
 
-    # model = Unet(in_channels=3, out_channels=3).to(device=device)
-    # optimizer = optim.Adam(model.parameters(), lr=1e-3)
-    # loss_fn = nn.MSELoss()
-    #
-    # train(data_pipe, model, optimizer, loss_fn, scaler)
-    #
-    # # save model
-    # torch.save(model.state_dict(), "model.pth")
+    model = Unet(in_channels=3, out_channels=3).to(device=device)
+    optimizer = optim.Adam(model.parameters(), lr=1e-3)
+    loss_fn = nn.MSELoss()
+
+    train(train_loader, val_loader, model, optimizer, loss_fn, num_epochs, device)
+
+    psnr, mse = evaluate(test_loader, model, loss_fn, device)
+    print(f"test_psnr : {psnr} - test_mse : {mse}")
+
+    # save model
+    if not os.path.exists(results_path):
+        os.makedirs(results_path)
+
+    torch.save(model.state_dict(), str(results_path + "model.pth"))
