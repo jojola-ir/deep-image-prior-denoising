@@ -6,7 +6,7 @@ import torch.optim as optim
 
 from tqdm.auto import tqdm
 
-from dataloader import build_data_pipe, transformations
+from dataloader import build_data_pipes, transformations
 from metrics import PSNR
 from model import Unet
 
