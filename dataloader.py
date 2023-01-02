@@ -45,7 +45,8 @@ def transformations():
         image: image, np.array
     """
     transform = transforms.Compose([
-        transforms.ConvertImageDtype(torch.float),
+        transforms.ToTensor(),
+        # transforms.ConvertImageDtype(torch.float),
         transforms.Resize((IMG_SIZE, IMG_SIZE)),
         transforms.Normalize(mean=(0.5, ),
                              std=(0.5, )),
