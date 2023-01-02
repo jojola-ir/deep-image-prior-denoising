@@ -90,7 +90,7 @@ if __name__ == "__main__":
     test_loader = build_data_pipes(test_path, transform, noise_parameter, batch_size)
 
     model = Unet(in_channels=3, out_channels=3).to(device=device)
-    optimizer = optim.Adam(model.parameters(), lr=1e-3)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     loss_fn = nn.MSELoss()
 
     train(train_loader, val_loader, model, optimizer, loss_fn, num_epochs, device)
