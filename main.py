@@ -35,15 +35,17 @@ def evaluate(loader, model, loss_fn, device):
 
 
 def train(train_loader, val_loader, model, optimizer, loss_fn, epochs, device):
-
-    for epoch in range(1, epochs+1):
-        print(f"Epoch {epoch} of {epochs} - ", end="")
+    for epoch in range(epochs+1):
+        print(f"Epoch {epoch + 1} of {epochs} - ", end="")
         for data, target in train_loader:
             data = data.to(device)
+
+            preds = model(data)
             target = target.to(device)
 
-            loss = loss_fn(model(data), target)
-            train_psnr = PSNR(target.cpu().detach(), model(data).cpu().detach())
+            loss = loss_fn(preds, target)
+            train_psnr = PSNR(target.cpu().detach(), preds.cpu().detach())
+            train_psnr = train_psnr.mean()
 
         # backward
         optimizer.zero_grad()
@@ -51,7 +53,6 @@ def train(train_loader, val_loader, model, optimizer, loss_fn, epochs, device):
         optimizer.step()
 
         psnr, mse = evaluate(val_loader, model, loss_fn, device)
-
         print(f"train_psnr: {train_psnr} - train_mse: {loss}", end="")
         print(f" - val_psnr: {psnr} - val_mse: {mse}")
 
