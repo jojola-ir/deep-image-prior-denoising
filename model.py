@@ -8,10 +8,10 @@ class ConvBlock(nn.Module):
         self.conv = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size, 1, 1, bias=False),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(inplace=True),
             nn.Conv2d(out_channels, out_channels, kernel_size, 1, 1, bias=False),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True)
+            nn.LeakyReLU(inplace=True)
         )
 
     def forward(self, x):
@@ -19,7 +19,7 @@ class ConvBlock(nn.Module):
 
 
 class Unet(nn.Module):
-    def __init__(self, in_channels=3, out_channels=3, in_features=64, depth=4):
+    def __init__(self, in_channels=3, out_channels=3, in_features=32, depth=3):
         super(Unet, self).__init__()
         self.downs = nn.ModuleList()
         self.ups = nn.ModuleList()
@@ -58,7 +58,7 @@ class Unet(nn.Module):
         for idx in range(0, len(self.ups), 2):
             x = self.ups[idx](x)
             skip = skips[idx//2]
-            
+
             if x.shape != skip.shape:
                 x = F.resize(x, size=skip.shape[2:])
 
@@ -68,7 +68,48 @@ class Unet(nn.Module):
         return self.output(x)
 
 
+class AutoEncoder(nn.Module):
+    def __init__(self, in_channels=3, out_channels=3, in_features=32, kernel_size=2, stride=2, depth=3):
+        super(AutoEncoder, self).__init__()
+        self.encoder = nn.ModuleList()
+        self.decoder = nn.ModuleList()
+
+        for d in range(depth):
+            features = in_features * 2 ** d
+            self.encoder.append(nn.Conv2d(in_channels, features, kernel_size, padding="same"))
+            self.encoder.append(nn.ReLU())
+            #if d != depth - 1:
+                #self.encoder.append(nn.MaxPool2d(kernel_size, stride))
+            self.encoder.append(nn.MaxPool2d(kernel_size, stride))
+            in_channels = features
+
+        self.bottleneck = ConvBlock(in_channels, in_channels*2)
+
+        for d in reversed(range(depth)):
+            features = in_features * 2 ** d
+            self.decoder.append(nn.ConvTranspose2d(features*2, features, kernel_size, stride))
+            self.decoder.append(nn.ReLU())
+
+        self.decoder.append(nn.ConvTranspose2d(features, out_channels, 1))
+        self.decoder.append(nn.Sigmoid())
+
+    def forward(self, x):
+        for layer in self.encoder:
+            x = layer(x)
+
+        x = self.bottleneck(x)
+
+        for layer in self.decoder:
+            x = layer(x)
+        return x
+
+
 if __name__ == "__main__":
-    model = Unet(in_channels=3, out_channels=3)
-    x = torch.randn((1, 3, 224, 224))
+    model = Unet(in_channels=3, out_channels=3, depth=3)
+    x = torch.randn((1, 3, 512, 512))
     print(model(x).shape)
+
+    p = 0
+    for param in model.parameters():
+        p += param.numel()
+    print(f"Number of parameters: {p}")

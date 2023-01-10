@@ -1,39 +1,37 @@
 import itertools
 
-import numpy as np
 import torch
-import os
-from PIL import Image
-from torch.utils.data import Dataset, default_collate
 import torchdata.datapipes as dp
-import torchvision
+from torch.utils.data import default_collate
 from torchvision import transforms
 from torchvision.io import read_image, ImageReadMode
 
-IMG_SIZE = 224
+IMG_SIZE = 512
 
 
-def get_noisy_image(image, noise_parameter):
+def get_noisy_image(image, noise_parameter=0.2):
     """Adds noise to an image.
 
     Args:
         image: image, np.array with values from 0 to 1
-        noise_parameter: std of the noise
     """
     image_shape = image.shape
 
-    noise_type = np.random.choice(['gaussian', 'poisson', 'bernoulli'])
-    if noise_type == 'gaussian':
-        noise = torch.normal(0, noise_parameter, image_shape)
-        noisy_image = (image + noise).clip(0, 1)
-    elif noise_type == 'poisson':
-        a = noise_parameter * torch.ones(image_shape)
-        noise = torch.poisson(a)
-        noise /= noise.max()
-        noisy_image = (image + noise).clip(0, 1)
-    elif noise_type == 'bernoulli':
-        noise = torch.bernoulli(noise_parameter * torch.ones(image_shape))
-        noisy_image = (image * noise).clip(0, 1)
+    # noise_type = np.random.choice(['gaussian', 'poisson', 'bernoulli'])
+    # if noise_type == 'gaussian':
+    #     noise = torch.normal(0, noise_parameter, image_shape)
+    #     noisy_image = (image + noise).clip(0, 1)
+    # elif noise_type == 'poisson':
+    #     a = noise_parameter * torch.ones(image_shape)
+    #     noise = torch.poisson(a)
+    #     noise /= noise.max()
+    #     noisy_image = (image + noise).clip(0, 1)
+    # elif noise_type == 'bernoulli':
+    #     noise = torch.bernoulli(noise_parameter * torch.ones(image_shape))
+    #     noisy_image = (image * noise).clip(0, 1)
+
+    noise = torch.normal(0, noise_parameter, image_shape)
+    noisy_image = (image + noise).clip(0, 1)
 
     return noisy_image
 
@@ -48,8 +46,8 @@ def transformations():
         transforms.ToTensor(),
         # transforms.ConvertImageDtype(torch.float),
         transforms.Resize((IMG_SIZE, IMG_SIZE)),
-        transforms.Normalize(mean=(0.5, ),
-                             std=(0.5, )),
+        transforms.Normalize(mean=(0, ),
+                             std=(1, )),
     ])
     return transform
 
