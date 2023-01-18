@@ -1,6 +1,10 @@
+import math
+
 import torch
 import torch.nn as nn
 import torchvision.transforms.functional as F
+
+from transformers import SwinModel
 
 class ConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3):
@@ -102,6 +106,61 @@ class AutoEncoder(nn.Module):
         for layer in self.decoder:
             x = layer(x)
         return x
+
+
+class Identity(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return x
+
+
+class CustomSwinSegModel(nn.Module):
+    """Creates a custom model."""
+
+    def __init__(self, checkpoint, upscale_factor=32):
+        super(CustomSwinSegModel, self).__init__()
+
+        swin = SwinModel.from_pretrained(checkpoint)
+        swin.pooler = Identity()
+
+        embed_dim = swin.config.hidden_size
+        num_layers = swin.config.num_hidden_layers
+        num_features = int(embed_dim * 2 ** (num_layers - 2))
+
+        self.model = swin
+
+        self.decoder = nn.Sequential(nn.Conv2d(embed_dim, num_features, kernel_size=(1, 1), stride=(1, 1)),
+                                     nn.PixelShuffle(upscale_factor=upscale_factor))
+
+    def forward(self, x):
+        x = self.model(x).last_hidden_state
+
+        x = x.transpose(1, 2)
+        batch_size, num_channels, sequence_length = x.shape
+        height = width = math.floor(sequence_length ** 0.5)
+        x = x.reshape(batch_size, num_channels, height, width)
+
+        x = self.decoder(x)
+
+        return x
+
+
+def build_model(model_type):
+    """Build a tiny Swin-Transformer.
+    Args:
+        model_name (str): The name of the model to build.
+    Returns:
+        model (nn.Module): The model.
+    """
+    cp = "microsoft/swin-tiny-patch4-window7-224"
+    if model_type == "denoising":
+        model = CustomSwinSegModel(checkpoint=cp)
+    else:
+        raise ValueError("Invalid model type")
+
+    return model
 
 
 if __name__ == "__main__":

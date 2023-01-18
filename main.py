@@ -11,9 +11,10 @@ from torch.utils.data import random_split
 from torchvision import datasets
 
 from skimage.metrics import peak_signal_noise_ratio as PSNR
+from tqdm.auto import tqdm
 
 from dataloader import build_data_pipes, get_noisy_image, transformations
-from model import Unet
+from model import build_model, Unet
 
 
 def evaluate(val_image, model, loss_fn, noise_parameter, device):
@@ -23,7 +24,7 @@ def evaluate(val_image, model, loss_fn, noise_parameter, device):
         data = get_noisy_image(val_image, noise_parameter)
         data = data.to(device)
 
-        preds = model(data)
+        preds = model(data).logits
 
         target = torch.clone(val_image)
         target = target.to(device)
@@ -43,10 +44,12 @@ def train(train_image, val_image, model, optimizer, loss_fn, epochs, device, noi
     data = get_noisy_image(train_image, noise_parameter)
     data = data.to(device)
 
-    for epoch in range(epochs):
-        print(f"Epoch {epoch + 1} of {epochs} | ", end="")
+    e = tqdm(range(epochs), desc="Training")
+    for epoch in e:
+        # print(f"Epoch {epoch + 1} of {epochs} | ", end="")
+        e.set_description(f"Epoch {epoch} / {epochs}")
         for _ in range(10):
-            preds = model(data)
+            preds = model(data).logits
             target = torch.clone(train_image)
             target = target.to(device)
 
@@ -60,8 +63,10 @@ def train(train_image, val_image, model, optimizer, loss_fn, epochs, device, noi
         optimizer.step()
 
         psnr, mse = evaluate(val_image, model, loss_fn, noise_parameter, device)
-        print(f"train_psnr: {train_psnr:.3f} - train_mse: {loss:.5f}", end="")
-        print(f" - val_psnr: {psnr:.3f} - val_mse: {mse:.5f}")
+        e.set_postfix(loss=loss.item(), train_psnr=train_psnr, train_mse=loss.item(),
+                      val_psnr=psnr, val_mse=mse.item())
+        # print(f"train_psnr: {train_psnr:.3f} - train_mse: {loss:.5f}", end="")
+        # print(f" - val_psnr: {psnr:.3f} - val_mse: {mse:.5f}")
 
         if epoch % 10 == 0:
             torch.save(model.state_dict(), join(results_path, f"model_{cs}.pth"))
@@ -121,9 +126,9 @@ if __name__ == "__main__":
         inputs, _ = next(iter(train_loader))
 
     else:
-        train_image = cv2.imread(join(train_path, "DSC00213.jpg"))
-        val_image = cv2.imread(join(train_path, "DSC00213.jpg"))
-        test_image = cv2.imread(join(train_path, "DSC00213.jpg"))
+        train_image = cv2.imread(join(train_path, "images/image1.png"))
+        val_image = cv2.imread(join(train_path, "images/image1.png"))
+        test_image = cv2.imread(join(train_path, "images/image2.png"))
 
         train_image = transform(train_image).unsqueeze(0)
         val_image = transform(val_image).unsqueeze(0)
@@ -135,7 +140,13 @@ if __name__ == "__main__":
 
     color_space = inputs.shape[1]
 
-    model = Unet(in_channels=color_space, out_channels=color_space, depth=3).to(device=device)
+    # model = Unet(in_channels=color_space, out_channels=color_space, depth=3).to(device=device)
+    # model_type = "denoising"
+    # model = build_model(model_type=model_type).to(device)
+
+    from transformers import SwinForMaskedImageModeling
+    model = SwinForMaskedImageModeling.from_pretrained("microsoft/swin-tiny-patch4-window7-224").to(device)
+    model.load_state_dict(torch.load(join(results_path, f"model_denoising.pth")))
 
     p = 0
     for param in model.parameters():
